@@ -1,20 +1,9 @@
 __author__ = 'yaronshahverdi'
 
-import collections
 import sys
 import requests
 import json
 import HTMLParser
-
-def convert(data):
-    if isinstance(data, basestring):
-        return str(data)
-    elif isinstance(data, collections.Mapping):
-        return dict(map(convert, data.iteritems()))
-    elif isinstance(data, collections.Iterable):
-        return type(data)(map(convert, data))
-    else:
-        return data
 
 class Product():
     def __init__(self, name, id, price):
@@ -29,8 +18,9 @@ n = float(sys.argv[2])
 
 error = False
 
+# get all price values that exist in the database
 price_facet_values = requests.get("http://api.zappos.com/Search?term=&facets=[\"price\"]&excludes=[\"results\"]&key=%s" % api_key)
-price_facet_values = convert(json.loads(price_facet_values.text))
+price_facet_values = json.loads(price_facet_values.text)
 if price_facet_values['statusCode'] == '401':
     print "API requests are being throttled"
     sys.exit(1)
@@ -40,7 +30,7 @@ all_prices = []
 for price in price_facet_values:
     all_prices.append(float(price['name']))
 
-# try to get x products, all of same price, adding up to n total dollars
+# try to get a price for which there are at least twice the amount of results than we want (because there duplicates in the database)
 product_price = round(n/x,2)
 total_results = 0
 while (product_price not in all_prices) or (round(product_price % 1,2) not in [0,0.5,0.99]) or (total_results < 2 * int(x)):
@@ -57,7 +47,7 @@ while (product_price not in all_prices) or (round(product_price % 1,2) not in [0
         product_price = round(product_price + 0.01,2)   # round up to .00
     if (product_price in all_prices) and round(product_price % 1,2) in (0,0.5,0.99):
         r = requests.get("http://api.zappos.com/Search?term=&filters={\"price\":[\"%s\"]}&key=%s" % (str(product_price),api_key))
-        product_data = convert(json.loads(r.text))
+        product_data = json.loads(r.text)
         total_results = int(product_data['totalResultCount'])
 
 x = int(x)
@@ -66,6 +56,7 @@ n = int(n)
 products = []
 product_ids = []
 
+# set result limit for page requests based on number of items we are looking for
 if x < 50:
     result_limit = 10
 elif x < 100:
@@ -73,10 +64,11 @@ elif x < 100:
 else:
     result_limit = 50
 
+# add products to our list of products
 if x <= result_limit:
     pages = 1
     r = requests.get("http://api.zappos.com/Search?term=&filters={\"price\":[\"%s\"]}&key=%s" % (str(product_price),api_key))
-    product_data = convert(json.loads(r.text))
+    product_data = json.loads(r.text)
     for i in xrange(int(x)):
         if product_data['results'][i]['productId'] not in product_ids:
             prod_detail = product_data['results'][i]
@@ -87,7 +79,7 @@ else:
     leftover = x % result_limit
     for page_number in xrange(pages):
         r = requests.get("http://api.zappos.com/Search?term=&limit=%s&page=%s&filters={\"price\":[\"%s\"]}&key=%s" % (result_limit,str(page_number),str(product_price),api_key))
-        product_data = convert(json.loads(r.text))
+        product_data = json.loads(r.text)
         for prod in product_data['results']:
             if prod['productId'] not in product_ids:
                 products.append(Product(HTMLParser.HTMLParser().unescape(prod['productName']), prod['productId'], float(prod['price'].lstrip('$'))))
@@ -95,9 +87,10 @@ else:
                 if len(products) == x:
                     break
 
+# because we ignored duplicates, we still need to add products until we have the amount we would like (x)
 while len(products) != x:
     r = requests.get("http://api.zappos.com/Search?term=&limit=%s&page=%s&filters={\"price\":[\"%s\"]}&key=%s" % (result_limit,str(pages),str(product_price),api_key))
-    product_data = convert(json.loads(r.text))
+    product_data = json.loads(r.text)
     for prod in product_data['results']:
         if prod['productId'] not in product_ids:
             products.append(Product(HTMLParser.HTMLParser().unescape(prod['productName']), prod['productId'], float(prod['price'].lstrip('$'))))
@@ -109,6 +102,7 @@ while len(products) != x:
         error = True
         break
 
+# print the products we found
 total = 0
 for i in xrange(len(products)):
     p = products[i]
