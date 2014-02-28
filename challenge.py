@@ -120,8 +120,8 @@ if error:
 
 
 if total > n:
-    print "\nTotal of $%.2f (+ $%.2f from original)" % (total,abs(n-total))
+    print "\nTotal of $%.2f (+ $%.2f from desired dollar amount)" % (total,abs(n-total))
 elif total == n:
     print "\nTotal of $%.2f" % total
 else:
-    print "\nTotal of $%.2f (- $%.2f from original)" % (total,n-total)
+    print "\nTotal of $%.2f (- $%.2f from desired dollar amount)" % (total,n-total)
